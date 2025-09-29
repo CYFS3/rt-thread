@@ -138,9 +138,6 @@ struct rt_thread *rt_susp_list_dequeue(rt_list_t *susp_list, rt_err_t thread_err
     {
         thread = RT_NULL;
     }
-    rt_sched_unlock(slvl);
-
-    LOG_D("resume thread:%s\n", thread->parent.name);
 
     return thread;
 }
