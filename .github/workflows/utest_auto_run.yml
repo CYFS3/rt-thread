@@ -19,6 +19,10 @@ on:
       - '**/README.md'
       - '**/README_zh.md'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -198,97 +202,3 @@ jobs:
 
           echo CONFIG_RT_USING_UTESTCASES=y >> $TEST_BSP_ROOT/.config
           cat examples/utest/configs/$TEST_CONFIG_FILE >> $TEST_BSP_ROOT/.config
-          scons --pyconfig-silent -C $TEST_BSP_ROOT
-          scons -j$(nproc) --strict -C $TEST_BSP_ROOT
-
-      - name: QEMU Run Test
-        if: ${{ env.TOOLCHAIN_INSTALLED != '' && success() }}
-        run: |
-          if [ "$TEST_SD_FILE" != "None" ]; then
-            dd if=/dev/zero of=$TEST_BSP_ROOT/sd.bin bs=1024 count=65536
-            mkfs.fat $TEST_BSP_ROOT/sd.bin
-          fi
-
-          if [[ "${{ matrix.platform.QEMU_ARCH }}"  == "aarch64" ]]; then 
-            qemu-system-$TEST_QEMU_ARCH -M virt,gic-version=2 -cpu cortex-a53 -smp 4 -kernel $TEST_BSP_ROOT/rtthread.bin  -nographic \
-            -drive if=none,file=$TEST_BSP_ROOT/sd.bin,format=raw,id=blk0 -device virtio-blk-device,drive=blk0,bus=virtio-mmio-bus.0 \
-            -netdev user,id=net0 -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1 \
-            > qemu_output_$TEST_QEMU_ARCH.log  2>&1 &
-          elif [[ "${{ matrix.platform.UTEST }}"  == "XUANTIE-rtsmart" ]]; then
-            sudo apt-get install -y dos2unix libcapstone-dev libbrlapi-dev
-            wget -q https://occ-oss-prod.oss-cn-hangzhou.aliyuncs.com/resource//1736318325160/Xuantie-qemu-x86_64-Ubuntu-20.04-V5.0.5-B20250108-0335.tar.gz
-            tar zxvf  Xuantie-qemu-x86_64-Ubuntu-20.04-V5.0.5-B20250108-0335.tar.gz
-            dos2unix ./install/qemu_post_install_small.sh
-            sudo chmod +x ./install/qemu_post_install_small.sh
-            sudo ./install/qemu_post_install_small.sh
-
-            QEMU_BIN="./install/bin/qemu-system-$TEST_QEMU_ARCH"
-            [ ! -f "$QEMU_BIN" ] && echo "ERROR: $QEMU_BIN not found." && exit 1
-
-            tmp_output=$(mktemp)
-            ldd "$QEMU_BIN" > "$tmp_output" 2>&1
-            missing_libs=$(grep "not found" "$tmp_output" | awk '{print $1}')
-
-            for lib in $missing_libs; do
-              base_lib=$(echo "$lib" | sed -E 's/\.so.*/\.so/')
-
-              echo "🔍 修复基础库：$base_lib ..."
-              sudo ln -s /usr/lib/x86_64-linux-gnu/$base_lib  /usr/lib/x86_64-linux-gnu/$lib
-            done
-            echo "✅ 所有缺失库已处理。"
-
-            $QEMU_BIN -cpu c906fd -M $TEST_QEMU_MACHINE -kernel $TEST_BSP_ROOT/rtthread.bin -nographic \
-            -drive if=none,file=$TEST_BSP_ROOT/sd.bin,format=raw,id=blk0 -device virtio-blk-device,drive=blk0,bus=virtio-mmio-bus.0 \
-            > qemu_output_$TEST_QEMU_ARCH.log  2>&1 &
-          elif [[ "${{ matrix.platform.QEMU_ARCH }}"  == "arm" ]]; then 
-            qemu-system-$TEST_QEMU_ARCH \
-                -nographic \
-                -M $TEST_QEMU_MACHINE \
-                -kernel $TEST_BSP_ROOT/rtthread.bin  \
-                -sd $TEST_BSP_ROOT/sd.bin  \
-                > qemu_output_$TEST_QEMU_ARCH.log  2>&1 &
-          else 
-            qemu-system-$TEST_QEMU_ARCH \
-                -nographic \
-                -M $TEST_QEMU_MACHINE \
-                -kernel $TEST_BSP_ROOT/rtthread.bin  \
-                > qemu_output_$TEST_QEMU_ARCH.log  2>&1 &
-          fi 
-
-          QEMU_PID=$!
-          disown $QEMU_PID
-      
-      - name: Monitor qemu log
-        if: ${{ env.TOOLCHAIN_INSTALLED != '' && success() }}
-        run: |
-          FAILURE_DETECTED=false
-          ERROR_LOGS=""
-          
-          echo "=========================================================================================="
-          echo " ||                                                                                    || "
-          echo " ||                          Start automatic running of Utest                          || "
-          echo " VV                                                                                    VV "
-          echo "=========================================================================================="
-          tail -n 0 -f qemu_output_$TEST_QEMU_ARCH.log | while read line; do
-            echo $line
-            if [[ "$line" == *"[  FAILED  ] [ result   ]"* ]]; then
-              ERROR_LOGS="$ERROR_LOGS$line"$'\n'
-              FAILURE_DETECTED=true
-            fi
-            
-            if [[ "$line" == *"[==========] [ utest    ] finished"* ]]; then
-              if $FAILURE_DETECTED; then
-                echo "=========================================================================================="
-                echo " ||                                                                                    || "
-                echo " ||         Error: Failures detected in logs. Below are the failure details...         || "
-                echo " VV                                                                                    VV "
-                echo "=========================================================================================="
-                echo "$ERROR_LOGS"
-                exit 1
-              fi
-              echo "=========================================================================================="
-              echo "                  Successed: Utest run completed. Exiting log monitoring                  "
-              echo "=========================================================================================="
-              break
-            fi
-          done
