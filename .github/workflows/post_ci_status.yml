@@ -6,6 +6,7 @@
 # Change Logs:
 # Date           Author       Notes
 # 2025-10-27     GitHub Copilot  Reusable workflow to post CI status
+# 2025-10-31     ChatGPT (review)  Add fork-safe token logic to fix 403 error
 
 name: Post CI Status Comment
 
@@ -33,9 +34,21 @@ jobs:
   post-comment:
     runs-on: ubuntu-22.04
     if: github.repository_owner == 'RT-Thread'
+
     steps:
+      - name: Select token
+        id: select_token
+        run: |
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; then
+            echo "token=${{ github.token }}" >> $GITHUB_OUTPUT
+          else      
+            echo "token=${{ secrets.CI_COMMENT_TOKEN }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Post or update CI status comment
         uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ steps.select_token.outputs.token }}
         with:
           script: |
             const prNumber = ${{ inputs.pr_number }};
@@ -88,7 +101,6 @@ jobs:
             commentBody += '*This comment is automatically updated as CI workflows complete.*\n';
             
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -97,7 +109,6 @@ jobs:
               });
               console.log(`Updated comment ${botComment.id} on PR #${prNumber}`);
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
