@@ -242,7 +242,17 @@ static rt_err_t ra_hw_spi_configure(struct rt_spi_device *device,
     spi_extended_cfg_t *spi_cfg = (spi_extended_cfg_t *)spi_dev->ra_spi_handle_t->spi_cfg_t->p_extend;
 
     /**< Configure Select Line */
-    rt_pin_write(device->cs_pin, PIN_HIGH);
+    if (!(configuration->mode & RT_SPI_NO_CS) && (device->cs_pin != PIN_NONE))
+    {
+        if (configuration->mode & RT_SPI_CS_HIGH)
+        {
+            rt_pin_write(device->cs_pin, PIN_LOW);
+        }
+        else
+        {
+            rt_pin_write(device->cs_pin, PIN_HIGH);
+        }
+    }
 
     /**< config bitrate */
 #if defined(SOC_SERIES_R7FA8M85) || defined(SOC_SERIES_R7KA8P1)
