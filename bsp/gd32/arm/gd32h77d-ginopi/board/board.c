@@ -12,6 +12,10 @@
 #include <rtthread.h>
 #include <board.h>
 
+#if defined(BSP_USING_GD32VW553_AT) && !defined(PKG_USING_AT_DEVICE_LATEST_VERSION)
+#error "GD32VW553 Wi-Fi requires the 'latest' version of at_device; select it in menuconfig"
+#endif
+
 #ifdef BSP_USING_LCD_MIPI
 #include "gd32h77x_78x_misc.h"
 #endif

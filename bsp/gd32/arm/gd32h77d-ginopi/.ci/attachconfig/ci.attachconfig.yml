@@ -137,6 +137,8 @@ package.lvgl:
 
 package.gd32vw553_wifi:
   kconfig:
+    - CONFIG_PKG_USING_AT_DEVICE=y
+    - CONFIG_PKG_USING_AT_DEVICE_LATEST_VERSION=y
     - CONFIG_BSP_USING_GD32VW553_AT=y
     - CONFIG_BSP_USING_GD32VW553_MQTT_DEMO=n
 
@@ -149,6 +151,7 @@ package.gd32vw553_mqtt:
 application.board_demo:
   depends:
     - package.lvgl
+    - package.gd32vw553_mqtt
     - peripheral.flash_fatfs
   kconfig:
     - CONFIG_BSP_USING_LVGL_BOARD_DEMO=y

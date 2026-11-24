@@ -64,6 +64,11 @@ void writespeed(const char *filename, int total_length, int block_size)
     rt_free(buff_ptr);
 
     /* calculate write speed */
+    if (tick == 0)
+    {
+        rt_kprintf("Write completed in less than one tick; speed unavailable\n");
+        return;
+    }
     rt_kprintf("File write speed: %d byte/s\n", total_length / tick * RT_TICK_PER_SECOND);
 }
 
@@ -160,6 +165,11 @@ void readspeed(const char *filename, int block_size)
     rt_free(buff_ptr);
 
     /* calculate read speed */
+    if (tick == 0)
+    {
+        rt_kprintf("Read completed in less than one tick; speed unavailable\n");
+        return;
+    }
     rt_kprintf("File read speed: %d byte/s\n", total_length / tick * RT_TICK_PER_SECOND);
 }
 
